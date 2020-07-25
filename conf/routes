@@ -1,0 +1,19 @@
+
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+GET           /events                                              controllers.EventsController.getEvents(visibility: Option[String], isTest: Option[Boolean], isMainstream: Option[Boolean])
+GET           /events/$id<[0-9]+>                                  controllers.EventsController.getEvent(id: Int)
+GET           /events/current                                      controllers.EventsController.getCurrentEvent(visibility: Option[String], isTest: Option[Boolean], isMainstream: Option[Boolean])
+GET           /events/current/public                               controllers.EventsController.getCurrentPublicEvent(mainstream: Option[Boolean])
+GET           /events/current/mainstream                           controllers.EventsController.getCurrentMainstreamEvent()
+
++nocsrf
+POST          /events                                              controllers.EventsController.createEvent
++nocsrf
+PUT           /events/$id<[0-9]+>                                  controllers.EventsController.updateEvent(id: Int)
++nocsrf
+POST          /events/$id<[0-9]+>/$key<[a-zA-Z0-9_-]{2,64}>        controllers.EventsController.setAttribute(id: Int, key: String)
++nocsrf
+DELETE        /events/$id<[0-9]+>/$key<[a-zA-Z0-9_-]{2,64}>        controllers.EventsController.deleteAttribute(id: Int, key: String)
