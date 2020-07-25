@@ -38,6 +38,10 @@ class EventsController @Inject()(cc: ControllerComponents, events: EventsModel, 
     events.getEvents(visibility, isTest, isMainstream, Map(), attrFilterByPrincipal(rq.principal))
       .map(_
         .filter(ev => isVisible(ev, rq.principal))
+        // Filter out archived and draft events to make this method usable by client apps
+        // (otherwise it'd always return the earliest event ever without parameters)
+        // Allow bypassing the filter using the argument
+        .filter(ev => visibility.nonEmpty || (ev.event.visibility != Visibility.Draft && ev.event.visibility != Visibility.Archived))
         .toList
         .sortBy(_.event.start)
         .headOption

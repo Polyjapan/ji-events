@@ -29,6 +29,7 @@ trait EventsService {
 
   /**
    * Get the event with the earliest start date. This function makes an HTTP request to the event server.
+   * <br>Archived and Draft events are excluded.
    * <br>An access token is used, make sure the configuration contains a `jiauth.clientSecret`
    * <br>Only events visible to the current app can be returned. Visibility depends on the permissions.
    *
