@@ -109,7 +109,7 @@ class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: A
    * @param value
    */
   override def setAttribute(id: Int, key: String, value: String): Future[Either[APIError, Boolean]] =
-    withToken(s"/events/$id/$key")(_.post(value))(_ => true)
+    withToken(s"/events/$id/$key")(_.put(value))(_ => true)
 
   override def deleteAttribute(id: Int, key: String): Future[Either[APIError, Boolean]] =
     withToken(s"/events/$id/$key")(_.delete)(_ => true)

@@ -1,0 +1,342 @@
+openapi: "3.0.0"
+info:
+  description: "Japan Impact's events management API"
+  version: "1.0.0"
+  title: "JI Events"
+servers:
+ - url: "https://api.japan-impact.ch/events"
+tags:
+  - name: "events"
+    description: "Management of events"
+paths:
+  /events:
+    get: 
+      tags: ["events"]
+      summary: "Get all events"
+      description: >
+        Returns a list of all events visible to the current authenticated user. Authentication is optional. 
+         * `Public` events are visible by everyone + anonymous users
+            * If the flag `test` is set to `true`, the scope `events/read/test` is required
+         * `Internal` events require the scope `events/read/internal` to read
+         * Other events require `events/read/*` to read
+         
+        Attributes are filtered, only attributes that are readable using the current token are returned in each event.
+      operationId: "getEvents"
+      parameters:
+        - $ref: "#/components/parameters/visibility"
+        - $ref: "#/components/parameters/isTest"
+        - $ref: "#/components/parameters/isMainstream"
+      responses:
+        200:
+          description: "The list of events"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventWithAttributes"
+      security:
+        - api_key: []
+    post: 
+      tags: ["events"]
+      summary: "Create an event"
+      operationId: "createEvent"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Event"
+      responses:
+        200:
+          description: >
+            Success. <br>
+            The event is returned back to you, with the ID field filled with the
+            actual ID for the event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+                
+
+      security:
+        - api_key: ["events/create"]
+  /events/{id}:
+    get: 
+      tags: ["events"]
+      summary: "Get one event"
+      description: >
+        Returns the event identified by this ID. A 403 will be fired if the user cannot see the event.
+         * `Public` events are visible by everyone + anonymous users
+            * If the flag `test` is set to `true`, the scope `events/read/test` is required
+         * `Internal` events require the scope `events/read/internal` to read
+         * Other events require `events/read/*` to read
+         
+        Attributes are filtered, only attributes that are readable using the current token are returned in the event.
+      operationId: "getEvent"
+      parameters:
+        - in: "path"
+          name: "id"
+          description: The ID of the event to get
+          required: true
+          schema:
+            type: number
+      responses:
+        403:
+          description: "Insufficient permissions to access this event"
+        404:
+          description: "No such event found"
+        200:
+          description: "The requested event"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventWithAttributes"
+      security:
+        - api_key: []
+    put:
+      tags: ["events"]
+      summary: "Update an event"
+      operationId: "updateEvent"
+      parameters:
+        - in: "path"
+          name: "id"
+          description: The ID of the event to update
+          required: true
+          schema:
+            type: number
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Event"
+      responses:
+        200:
+          description: Update success
+      security:
+        - api_key: ["events/update"]
+  /events/{id}/{key}:
+    post: 
+      tags: ["events"]
+      summary: "Set an attribute in an event"
+      description: >
+        Sets an attribute in an event. You can limit the visibility of an attribute by prefixing its key.
+          * Attribute keys starting with `_` (e.g. `_key`) are **internal**: only authentified apps can read them.
+          * Attribute keys starting with `__` (e.g. `__key`) are **private**: only the app that authored them can read them.
+          * Other attribute keys are **public:** visible to everyone (incl. anonymous users)
+            
+          Permissions also regulate the visibility of attributes.
+           * `events/attributes/full` allows reading all attributes attributes
+           * `events/attribute/own` allows reading internal attributes + the private attributes that the app authored
+           * Otherwise, only public attributes can be read.
+           
+          If the attribute already exists and has been authored by an other app, you need to have the permission `events/attributes/set/<ID of the author of the attribute>` to overwrite it.
+      operationId: "setAttribute"
+      parameters:
+        - in: "path"
+          name: "id"
+          description: The ID of the event to update
+          required: true
+          schema:
+            type: number
+        - in: "path"
+          required: true
+          name: "key"
+          description: The key of the attribute to set.
+          schema:
+            type: string
+      requestBody:
+        content:
+          text/plain:
+            schema:
+              type: string
+              maxLength: 1000
+      responses:
+        200:
+          description: Update success
+        403:
+          description: Missing permission
+      security:
+        - api_key: ["events/attributes/set"]
+    delete: 
+      tags: ["events"]
+      summary: "Delete an attribute from an event"
+      operationId: "deleteAttribute"
+      
+      description: >
+        Deletes an attribute from an event. If the attribute was authored by an other app, you need the scope `events/attributes/delete/<ID of the author of the attribute>` to delete it.
+      parameters:
+        - in: "path"
+          name: "id"
+          description: The ID of the event to update
+          required: true
+          schema:
+            type: number
+        - in: "path"
+          required: true
+          name: "key"
+          description: The key of the attribute to delete.
+          schema:
+            type: string
+      responses:
+        200:
+          description: Delete success
+        403:
+          description: Missing permission
+      security:
+        - api_key: ["events/attributes/delete"]
+  /events/current:
+    get: 
+      tags: ["events"]
+      summary: "Get the current event"
+      description: >
+        Returns the current event according to the permissions of the optionally provided token. 
+         * `Public` events are visible by everyone + anonymous users
+            * If the flag `test` is set to `true`, the scope `events/read/test` is required
+         * `Internal` events require the scope `events/read/internal` to read
+         * Other events require `events/read/*` to read
+         
+        Among all the visible events, **the current event is determined as the event with the lowest start date**.
+          
+        If no `visibility` parameter is provided, **Draft** and **Archived** events are excluded from this method.
+         
+        Attributes are filtered, only attributes that are readable using the current token are returned in the event.
+      operationId: "getCurrentEvent"
+      parameters:
+        - $ref: "#/components/parameters/visibility"
+        - $ref: "#/components/parameters/isTest"
+        - $ref: "#/components/parameters/isMainstream"
+      responses:
+        404:
+          description: "No event found with the current criteria"
+        200:
+          description: "The current event"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventWithAttributes"
+      security:
+        - api_key: []
+  /events/current/public:
+    get: 
+      tags: ["events"]
+      summary: "Get the current public event"
+      description: >
+        Returns the current event with `Public` visibility, and `isTest == false`.
+         
+        Among all the `Public, isTest = false` events, **the current event is determined as the event with the lowest start date**.
+          
+        Attributes are filtered, only attributes that are readable using the current token are returned in the event.
+          
+        This is an equivalent to calling `/events/current?visibility=Public&isTest=false`.
+      operationId: "getCurrentPublicEvent"
+      parameters:
+        - $ref: "#/components/parameters/isMainstream"
+      responses:
+        404:
+          description: "No event found with the current criteria"
+        200:
+          description: "The current event"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventWithAttributes"
+      security:
+        - api_key: []
+  /events/current/mainstream:
+    get: 
+      tags: ["events"]
+      summary: "Get the current public mainstream event"
+      description: >
+        Returns the current event with `Public` visibility, `isTest == false` and `isMainstream == true`.
+         
+        Among all the `Public, isTest = false, isMainstream = true` events, **the current event is determined as the event with the lowest start date**.
+          
+        Attributes are filtered, only attributes that are readable using the current token are returned in the event.
+          
+        This is an equivalent to calling `/events/current?visibility=Public&isTest=false&isMainstream=true` or `/events/current/public?isMainstream=true`.
+      operationId: "getCurrentMainstreamEvent"
+      responses:
+        404:
+          description: "No event found with the current criteria"
+        200:
+          description: "The current event"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventWithAttributes"
+      security:
+        - api_key: []
+  
+components:
+  securitySchemes:
+    api_key:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT 
+  parameters:
+    visibility:
+      in: "query"
+      name: "visibility"
+      description: If provided, only show events that have this visiblity
+      schema:
+        $ref: "#/components/schemas/Visibility"
+    isTest:
+      in: "query"
+      name: "isTest"
+      description: If provided, only show events that have the same value for the test flag
+      schema:
+        type: boolean
+    isMainstream:
+      in: "query"
+      name: "isMainstream"
+      description: >
+        If provided, only show events that have the same value for the mainstream flag.
+        A mainstream event is typically an edition of JI.
+      schema:
+        type: boolean
+  schemas:
+    Visibility:
+      description: >
+        The visibility of the event.
+        * `Draft` - The event is a draft, this means it's not yet ready to be used - either internally or publically
+        * `Internal` - The event is usable internally (i.e. on staff spaces and all) but not publically (should not be displayed in shop for example)
+        * `Public` - The event is public - all apps can access it
+        * `Archived` - The event is archived. It's like Internal but in an unmodifiable fashion. You should not change archived events.
+      type: "string"
+      enum: [Draft, Internal, Public, Archived]
+    Event:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        location:
+          description: The place where the event takes happens
+          type: string
+        visibility: 
+          $ref: "#/components/schemas/Visibility"
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        archive:
+          type: string
+          format: date-time
+          description: The date at which the event will be automatically archived
+        isTest:
+          type: boolean
+        isMainstream:
+          type: boolean
+          description: A mainstream event is typically a Japan Impact edition
+    EventWithAttributes:
+      type: object
+      properties:
+        event: 
+          $ref: "#/components/schemas/Event"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string

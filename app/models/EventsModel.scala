@@ -81,7 +81,7 @@ class EventsModel @Inject()(dbApi: play.api.db.DBApi)(implicit ec: ExecutionCont
     })
   }
 
-  def getEvents(visibility: Option[Visibility.Value], isTest: Option[Boolean], isMainstream: Option[Boolean], attributes: Map[String, String], filter: AttributeFilter) = Future(db.withConnection { implicit c =>
+  def getEvents(visibility: Option[Visibility.Value], isTest: Option[Boolean], isMainstream: Option[Boolean], attributes: Map[String, String], filter: AttributeFilter): Future[immutable.Iterable[Event]] = Future(db.withConnection { implicit c =>
     housekeep();
 
     var whereClauses = List[String]()
