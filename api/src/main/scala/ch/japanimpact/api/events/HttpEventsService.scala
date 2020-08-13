@@ -5,6 +5,7 @@ import ch.japanimpact.api.events.events.{Event, SimpleEvent, Visibility}
 import ch.japanimpact.auth.api.apitokens.{APITokensService, AppTokenRequest}
 import javax.inject.{Inject, Singleton}
 import play.api.Configuration
+import play.api.cache.AsyncCacheApi
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.ws._
 
@@ -16,13 +17,9 @@ import scala.concurrent.{ExecutionContext, Future}
  * @author Louis Vialar
  */
 @Singleton
-class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: APITokensService)(implicit ec: ExecutionContext) extends EventsService {
+class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: APITokensService, cache: AsyncCacheApi)(implicit ec: ExecutionContext) extends EventsService {
   private val apiBase = config.get[String]("events.baseUrl")
-
-  private val cachedMainstream = new CachedValue[Event](this.getCurrentMainstreamEvent)
-  private val cachedEvents = new CachedValue[Iterable[Event]](this.getEvents())
-
-
+  private val cacheDuration = config.getOptional[Duration]("events.cacheDuration").getOrElse(10.minutes)
   private val token = new TokenHolder
 
   private def withToken[T](endpoint: String)(exec: WSRequest => Future[WSResponse])(map: JsValue => T): Future[Either[APIError, T]] =
@@ -62,14 +59,27 @@ class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: A
     }
   }
 
+  private def cacheOnlySuccess[T](cacheKey: String)(orElse: => Future[Either[APIError, T]]): Future[Either[APIError, T]] = {
+    cache.getOrElseUpdate(cacheKey, cacheDuration)(orElse)
+      .map { o =>
+        if (o.isLeft) cache.remove(cacheKey)
+        o
+      }
+
+  }
+
   override def getEvents(visibility: Option[Visibility.Value] = None, isTest: Option[Boolean] = None, isMainstream: Option[Boolean] = None): Future[Either[APIError, Iterable[Event]]] = {
     val params = List(visibility.map(v => "visibility" -> v.toString),
       isTest.map(t => "isTest" -> t.toString),
       isMainstream.map(m => "isMainstream" -> m.toString)).flatten
 
-    withToken(s"/events")(_
-      .withQueryStringParameters(params: _*)
-      .get)(_.as[Iterable[Event]])
+    val key = "events.get:" + params.mkString(";")
+
+    cacheOnlySuccess(key) {
+      withToken(s"/events")(_
+        .withQueryStringParameters(params: _*)
+        .get)(_.as[Iterable[Event]])
+    }
   }
 
   override def getCurrentEvent(visibility: Option[Visibility.Value] = None, isTest: Option[Boolean] = None, isMainstream: Option[Boolean] = None): Future[Either[APIError, Event]] = {
@@ -77,22 +87,37 @@ class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: A
       isTest.map(t => "isTest" -> t.toString),
       isMainstream.map(m => "isMainstream" -> m.toString)).flatten
 
-    withToken(s"/events/current")(_
-      .withQueryStringParameters(params: _*)
-      .get())(_.as[Event])
+
+    val key = "events.current:" + params.mkString(";")
+
+    cacheOnlySuccess(key) {
+      withToken(s"/events/current")(_
+        .withQueryStringParameters(params: _*)
+        .get())(_.as[Event])
+    }
   }
 
-  override def getCachedEvents: Future[Iterable[Event]] = this.cachedEvents.getOpt.map(_.getOrElse(Iterable.empty))
+  @deprecated
+  override def getCachedEvents: Future[Iterable[Event]] = this.getEvents().map(_.toOption.getOrElse(Iterable.empty))
 
-  override def getEvent(id: Int): Future[Either[APIError, Event]] = withToken(s"/events/$id")(_.get)(_.as[Event])
+  override def getEvent(id: Int): Future[Either[APIError, Event]] = {
+    cacheOnlySuccess(s"event.$id") {
+      withToken(s"/events/$id")(_.get)(_.as[Event])
+    }
+  }
 
   override def getCurrentPublicEvent: Future[Either[APIError, Event]] =
-    withToken(s"/events/current/public")(_.get)(_.as[Event])
+    cacheOnlySuccess("event.currentPublic") {
+      withToken(s"/events/current/public")(_.get)(_.as[Event])
+    }
 
   override def getCurrentMainstreamEvent: Future[Either[APIError, Event]] =
-    withToken(s"/events/current/mainstream")(_.get)(_.as[Event])
+    cacheOnlySuccess("event.currentMainstream") {
+      withToken(s"/events/current/mainstream")(_.get)(_.as[Event])
+    }
 
-  override def getCachedMainstreamEvent: Future[Option[Event]] = this.cachedMainstream.getOpt
+  @deprecated
+  override def getCachedMainstreamEvent: Future[Option[Event]] = this.getCurrentMainstreamEvent
 
   override def createEvent(event: SimpleEvent): Future[Either[APIError, SimpleEvent]] =
     withToken("/events")(_.post(Json.toJson(event)))(_.as[SimpleEvent])
@@ -133,31 +158,6 @@ class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: A
           }
       }
     }
-  }
-
-  private class CachedValue[T](refresher: => Future[Either[APIError, T]], duration: Duration = 15.minutes) {
-    var cached: T = _
-    var exp: Long = _
-
-    def get: Future[T] = {
-      if (cached != null && exp > System.currentTimeMillis() + 1000) Future.successful(cached)
-      else {
-        refresher.map {
-          case Right(v) =>
-            this.cached = v;
-            this.exp = duration.toMillis + System.currentTimeMillis()
-            this.cached
-          case Left(e) =>
-            println(e)
-
-            if (cached != null) cached
-            else throw new Exception("No result returned")
-        }
-      }
-    }
-
-    def getOpt: Future[Option[T]] =
-      get.map(Some.apply).recover(_ => None)
   }
 
 }

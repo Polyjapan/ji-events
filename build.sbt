@@ -17,7 +17,8 @@ lazy val api = (project in file("api/"))
     publishArtifact in(Compile, packageBin) := true,
     libraryDependencies += "com.typesafe.play" %% "play-ws" % "2.8.1",
     libraryDependencies += "com.pauldijou" %% "jwt-play-json" % "4.2.0",
-    libraryDependencies += "com.google.inject" % "guice" % "4.2.2"
+    libraryDependencies += "com.google.inject" % "guice" % "4.2.2",
+    libraryDependencies += cacheApi
 )
 
 
