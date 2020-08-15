@@ -8,6 +8,8 @@ ThisBuild / libraryDependencies ++= Seq(
   "ch.japanimpact" %% "jiauthframework" % "1.0-SNAPSHOT",
   "com.typesafe.play" %% "play-json-joda" % "2.8.1",
 )
+ThisBuild / resolvers += "Japan Impact Releases" at "https://repository.japan-impact.ch/releases"
+ThisBuild / resolvers += "Japan Impact Snapshots" at "https://repository.japan-impact.ch/snapshots"
 
 lazy val api = (project in file("api/"))
   .settings(
