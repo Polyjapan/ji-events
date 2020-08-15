@@ -117,7 +117,7 @@ class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: A
     }
 
   @deprecated
-  override def getCachedMainstreamEvent: Future[Option[Event]] = this.getCurrentMainstreamEvent
+  override def getCachedMainstreamEvent: Future[Option[Event]] = this.getCurrentMainstreamEvent.map(_.toOption)
 
   override def createEvent(event: SimpleEvent): Future[Either[APIError, SimpleEvent]] =
     withToken("/events")(_.post(Json.toJson(event)))(_.as[SimpleEvent])
