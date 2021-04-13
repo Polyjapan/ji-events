@@ -5,7 +5,7 @@ ThisBuild / version      := "1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play-json" % "2.8.1",
-  "ch.japanimpact" %% "jiauthframework" % "1.0-SNAPSHOT",
+  "ch.japanimpact" %% "jiauthframework" % "2.0-SNAPSHOT",
   "com.typesafe.play" %% "play-json-joda" % "2.8.1",
 )
 ThisBuild / resolvers += "Japan Impact Releases" at "https://repository.japan-impact.ch/releases"
@@ -27,7 +27,7 @@ lazy val api = (project in file("api/"))
 
 
 lazy val root = (project in file("."))
-  .enablePlugins(PlayScala)
+  .enablePlugins(PlayScala, JavaServerAppPackaging, DockerPlugin)
   .settings(
     name := "ji-events",
     libraryDependencies ++= Seq(jdbc, evolutions, ehcache, ws, specs2 % Test, guice),
@@ -42,7 +42,23 @@ lazy val root = (project in file("."))
     scalacOptions ++= Seq(
       "-feature",
       "-deprecation"
-    )
+    ),
+
+    javaOptions in Universal ++= Seq(
+      // Provide the PID file
+      s"-Dpidfile.path=/dev/null",
+      // s"-Dpidfile.path=/run/${packageName.value}/play.pid",
+
+      // Set the configuration to the production file
+      s"-Dconfig.file=/etc/${packageName.value}/application.conf",
+
+      // Apply DB evolutions automatically
+      "-DapplyEvolutions.default=true"
+    ),
+
+    dockerExposedPorts := Seq(80),
+    dockerUsername := Some("polyjapan"),
+    dockerBaseImage := "openjdk:11"
   )
   .aggregate(api)
   .dependsOn(api)
