@@ -18,17 +18,24 @@ import scala.concurrent.{ExecutionContext, Future}
  */
 @Singleton
 class HttpEventsService @Inject()(ws: WSClient, config: Configuration, tokens: APITokensService, cache: AsyncCacheApi)(implicit ec: ExecutionContext) extends EventsService {
-  private val apiBase = config.get[String]("events.baseUrl")
+  private val apiBase = {
+    var url = config.get[String]("events.baseUrl")
+    while (url.endsWith("/")) url = url.dropRight(1)
+    url
+  }
   private val cacheDuration = config.getOptional[Duration]("events.cacheDuration").getOrElse(10.minutes)
   private val token = new TokenHolder
 
-  private def withToken[T](endpoint: String)(exec: WSRequest => Future[WSResponse])(map: JsValue => T): Future[Either[APIError, T]] =
+  private def withToken[T](endpoint: String)(exec: WSRequest => Future[WSResponse])(map: JsValue => T): Future[Either[APIError, T]] = {
+    val endpointNoSlash = endpoint.dropWhile(_ == '/')
+
     token()
-      .map(token => ws.url(s"$apiBase/$endpoint").addHttpHeaders("Authorization" -> ("Bearer " + token)))
+      .map(token => ws.url(s"$apiBase/$endpointNoSlash").addHttpHeaders("Authorization" -> ("Bearer " + token)))
       .flatMap(r => mapping(r)(exec)(map))
       .recover {
         case ex: Throwable => Left(APIError(ex.getClass.getName, ex.getMessage))
       }
+  }
 
   private def mapping[T](request: WSRequest)(exec: WSRequest => Future[WSResponse])(map: JsValue => T): Future[Either[APIError, T]] = {
     val r = exec(request)
